@@ -234,45 +234,71 @@
       .card-actions{padding:0 14px 14px 14px;}
       .card-btn{font-size:13px;}
     }
-    /* Мобильные кнопки навигации (появляются только на телефоне) */
-.mobile-nav {
-  display: none;
-  position: fixed;
-  bottom: 24px;
-  left: 0;
-  right: 0;
-  justify-content: center;
-  gap: 20px;
-  z-index: 80;
-  background: transparent;
-  pointer-events: none;
-}
-.mobile-nav button {
-  pointer-events: auto;
-  font-family: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  font-weight: 600;
-  font-size: 18px;
-  padding: 12px 24px;
-  border-radius: 48px;
-  border: none;
-  background: #111827;
-  color: white;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-  cursor: pointer;
-  transition: 0.1s ease;
-}
-.mobile-nav button:active { transform: scale(0.96); background: #dc2626; }
-.mobile-nav button:disabled {
-  opacity: 0.4;
-  transform: none;
-  cursor: default;
-  background: #111827;
+/* Навигационные кнопки — только на телефоне */
+/* На телефонах (сенсорный экран, ширина ≤768px) карта становится НЕ фиксированной, кнопки под картой */
+@media (max-width: 768px) and (pointer: coarse) {
+  body {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+  #map {
+    position: relative !important;
+    width: 100%;
+    height: 70vh;
+    flex-shrink: 0;
+  }
+  .scrolly {
+    flex: 1;
+    pointer-events: auto;
+  }
+  .step {
+    pointer-events: auto;
+  }
+  .card {
+    position: fixed;  /* карточка по-прежнему поверх карты, не мешает */
+    bottom: 20px;
+  }
+  .mobile-nav {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    padding: 16px 0 24px;
+    background: transparent;
+    position: relative;
+    z-index: 10;
+  }
+  .mobile-nav button {
+    font-family: "Montserrat", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    padding: 12px 24px;
+    border-radius: 48px;
+    border: none;
+    background: #111827;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: 0.1s ease;
+  }
+  .mobile-nav button:active {
+    transform: scale(0.96);
+    background: #dc2626;
+  }
+  .mobile-nav button:disabled {
+    opacity: 0.4;
+    transform: none;
+    cursor: default;
+    background: #111827;
+  }
 }
 
-@media (max-width: 980px) {
-  .mobile-nav { display: flex !important; }
-  .scrolly { pointer-events: none; }
-  .step { height: auto; min-height: 65vh; pointer-events: none; }
+@media (min-width: 769px), (pointer: fine) {
+  .mobile-nav {
+    display: none !important;
+  }
 }
   </style>
 </head>
@@ -2067,6 +2093,7 @@
   });
 
   const scroller = scrollama();
+  window.scroller = scroller;
   scroller
     .setup({ step: ".step", offset: 0.62 })
     .onStepEnter(resp => {
@@ -2079,6 +2106,8 @@
       }
       activate(id);
     });
+
+    
 
   window.addEventListener("resize", () => scroller.resize());
 
@@ -2094,7 +2123,7 @@
 // ---------- 1. НЕРАЗРЫВНЫЕ ПРОБЕЛЫ (улучшенная версия) ----------
 // ---------- 1. НЕРАЗРЫВНЫЕ ПРОБЕЛЫ (глобальная функция + автоматический вызов после обновления карточки) ----------
 (function() {
-  const words = ['в','на','с','к','у','о','об','под','над','за','перед','через','из','и','а','но','до','по','или','либо','то','как','что','от','чтобы','потому','также','так','если','когда','будто','словно','чем','пусть','хоть'];
+  const words = ['в','на','с','к','у','о','об','для','под','над','за','перед','через','из','и','а','но','до','по','или','либо','то','как','что','от','чтобы','потому','также','так','если','когда','будто','словно','чем','пусть','хоть'];
   const regex = new RegExp('(^|\\s)(' + words.join('|') + ')(\\s+)', 'giu');
 
   window.replaceSpaces = function(node) {
@@ -2131,92 +2160,107 @@
   }
 })();
 
-// ---------- 2. МОБИЛЬНАЯ НАВИГАЦИЯ (упрощённая и надёжная) ----------
+// ---------- КНОПКИ НАВИГАЦИИ: НА ТЕЛЕФОНЕ ЗАМЕНЯЮТ СКРОЛЛ ----------
 (function() {
-  const isMobile = () => window.innerWidth <= 768;
+  const isMobileTouch = () => window.matchMedia('(pointer: coarse) and (max-width: 768px)').matches;
+  let scrollerInstance = null;
+  let originalActivate = window.activate;
 
-  let mobileActive = false;
-  let stepsList = [];
-  let currentIdx = 0;
-  let originalActivate = null;
-
-  function updateButtons() {
-    const prev = document.getElementById('mobilePrevBtn');
-    const next = document.getElementById('mobileNextBtn');
-    if (prev) prev.disabled = (currentIdx <= 0);
-    if (next) next.disabled = (currentIdx >= stepsList.length - 1);
+  // Получаем экземпляр scrollama после инициализации
+  function getScroller() {
+    if (window.scroller) scrollerInstance = window.scroller;
   }
 
-  function go(delta) {
-    let newIdx = currentIdx + delta;
-    if (newIdx < 0) newIdx = 0;
-    if (newIdx >= stepsList.length) newIdx = stepsList.length - 1;
-    if (newIdx === currentIdx) return;
-    currentIdx = newIdx;
-    const stepId = stepsList[currentIdx];
-    if (stepId && window.activate) {
-      window.activate(stepId);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-    updateButtons();
-  }
-
-  function refreshSteps() {
+  function getSteps() {
     const steps = document.querySelectorAll('.step');
-    stepsList = Array.from(steps).map(s => s.dataset.step).filter(id => id && id !== 'end');
-    if (window.CURRENT_STEP) {
-      currentIdx = stepsList.indexOf(window.CURRENT_STEP);
-      if (currentIdx === -1) currentIdx = 0;
-    }
-    updateButtons();
+    return Array.from(steps).map(s => s.dataset.step).filter(id => id && id !== 'end');
   }
 
-  function enableMobile() {
-    if (mobileActive) return;
-    mobileActive = true;
-    refreshSteps();
+  function getCurrentIndex() {
+    const steps = getSteps();
+    return steps.indexOf(window.CURRENT_STEP);
+  }
 
+  function scrollToStep(index) {
+    const steps = document.querySelectorAll('.step');
+    if (steps[index]) {
+      steps[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function updateButtonsState(prevBtn, nextBtn) {
+    const steps = getSteps();
+    const idx = getCurrentIndex();
+    if (prevBtn) prevBtn.disabled = (idx <= 0);
+    if (nextBtn) nextBtn.disabled = (idx >= steps.length - 1);
+  }
+
+  function enableMobileMode() {
     const prevBtn = document.getElementById('mobilePrevBtn');
     const nextBtn = document.getElementById('mobileNextBtn');
-    if (prevBtn) prevBtn.onclick = () => go(-1);
-    if (nextBtn) nextBtn.onclick = () => go(1);
+    if (!prevBtn || !nextBtn) return;
 
     // Отключаем scrollama
-    if (window.scroller && typeof window.scroller.disable === 'function') window.scroller.disable();
-    // Делаем шаги неактивными для прокрутки
-    document.querySelectorAll('.step').forEach(s => s.style.opacity = '0');
+    if (scrollerInstance && typeof scrollerInstance.disable === 'function') {
+      scrollerInstance.disable();
+    }
 
-    // Перехватываем activate для синхронизации индекса
-    if (!originalActivate) originalActivate = window.activate;
-    window.activate = (stepId) => {
+    // Переопределяем activate для обновления кнопок
+    window.activate = function(stepId) {
       if (originalActivate) originalActivate(stepId);
-      if (isMobile()) {
-        const idx = stepsList.indexOf(stepId);
-        if (idx !== -1) currentIdx = idx;
-        updateButtons();
+      updateButtonsState(prevBtn, nextBtn);
+    };
+
+    // Назначаем обработчики кнопок
+    prevBtn.onclick = () => {
+      const steps = getSteps();
+      let idx = getCurrentIndex();
+      if (idx === -1) idx = 0;
+      if (idx > 0) {
+        const newStep = steps[idx - 1];
+        window.activate(newStep);
+        scrollToStep(idx - 1);
       }
     };
+    nextBtn.onclick = () => {
+      const steps = getSteps();
+      let idx = getCurrentIndex();
+      if (idx === -1) idx = 0;
+      if (idx < steps.length - 1) {
+        const newStep = steps[idx + 1];
+        window.activate(newStep);
+        scrollToStep(idx + 1);
+      }
+    };
+
+    updateButtonsState(prevBtn, nextBtn);
   }
 
-  function disableMobile() {
-    if (!mobileActive) return;
-    mobileActive = false;
-    if (window.scroller && typeof window.scroller.enable === 'function') window.scroller.enable();
-    document.querySelectorAll('.step').forEach(s => s.style.opacity = '');
-    if (window.scroller && typeof window.scroller.resize === 'function') window.scroller.resize();
+  function enableDesktopMode() {
+    // Включаем scrollama обратно
+    if (scrollerInstance && typeof scrollerInstance.enable === 'function') {
+      scrollerInstance.enable();
+    }
+    document.querySelectorAll('.step').forEach(step => step.style.pointerEvents = '');
+    // Восстанавливаем оригинальный activate
     if (originalActivate) window.activate = originalActivate;
   }
 
-  function toggle() {
-    const mobile = isMobile();
-    const nav = document.getElementById('mobileNav');
-    if (nav) nav.style.display = mobile ? 'flex' : 'none';
-    if (mobile) enableMobile();
-    else disableMobile();
+  function handleResize() {
+    getScroller();
+    if (isMobileTouch()) {
+      enableMobileMode();
+    } else {
+      enableDesktopMode();
+    }
   }
 
-  window.addEventListener('resize', toggle);
-  toggle(); // запуск при загрузке
+  // Ждём полной загрузки страницы и инициализации scrollama
+  window.addEventListener('load', () => {
+    getScroller();
+    handleResize();
+    window.addEventListener('resize', handleResize);
+  });
 })();
 </script>
 <div class="mobile-nav" id="mobileNav">
