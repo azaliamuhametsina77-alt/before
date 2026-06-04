@@ -2169,13 +2169,12 @@
   }
 })();
 
-// ---------- КНОПКИ НАВИГАЦИИ: НА ТЕЛЕФОНЕ ЗАМЕНЯЮТ СКРОЛЛ ----------
 (function() {
   const isMobileTouch = () => window.matchMedia('(pointer: coarse) and (max-width: 768px)').matches;
   let scrollerInstance = null;
-  let originalActivate = window.activate;
+  let originalActivate = null; // будет сохранена после инициализации карты
+  let savedActivateForDesktop = null; // для восстановления
 
-  // Получаем экземпляр scrollama после инициализации
   function getScroller() {
     if (window.scroller) scrollerInstance = window.scroller;
   }
@@ -2214,9 +2213,16 @@
       scrollerInstance.disable();
     }
 
-    // Переопределяем activate для обновления кнопок
+    // Сохраняем текущую activate (она уже определена)
+    if (typeof window.activate === 'function') {
+      originalActivate = window.activate;
+    }
+
+    // Переопределяем activate с обновлением кнопок
     window.activate = function(stepId) {
-      if (originalActivate) originalActivate(stepId);
+      if (typeof originalActivate === 'function') {
+        originalActivate(stepId);
+      }
       updateButtonsState(prevBtn, nextBtn);
     };
 
@@ -2250,9 +2256,10 @@
     if (scrollerInstance && typeof scrollerInstance.enable === 'function') {
       scrollerInstance.enable();
     }
-    document.querySelectorAll('.step').forEach(step => step.style.pointerEvents = '');
-    // Восстанавливаем оригинальный activate
-    if (originalActivate) window.activate = originalActivate;
+    // Восстанавливаем оригинальную activate (если была сохранена)
+    if (typeof originalActivate === 'function') {
+      window.activate = originalActivate;
+    }
   }
 
   function handleResize() {
@@ -2264,9 +2271,12 @@
     }
   }
 
-  // Ждём полной загрузки страницы и инициализации scrollama
+  // Ждём полной загрузки страницы, когда карта уже создана
   window.addEventListener('load', () => {
-    getScroller();
+    // Убедимся, что оригинальная activate существует
+    if (typeof window.activate === 'function') {
+      originalActivate = window.activate;
+    }
     handleResize();
     window.addEventListener('resize', handleResize);
   });
